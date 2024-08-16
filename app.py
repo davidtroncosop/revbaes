@@ -1,21 +1,22 @@
-import pandas as pd
-import dropbox
-import streamlit as st
-from dotenv import load_dotenv
+import io
 import os
+import pandas as pd
+import streamlit as st
+import dropbox
+from dotenv import load_dotenv
 from datetime import datetime
 import calendar
 
-# Cargar las variables de entorno desde el archivo .env
+# Load environment variables from .env file
 load_dotenv()
 
-# Obtener el token de acceso de Dropbox desde el archivo .env
+# Get the Dropbox access token from the .env file
 access_token = os.getenv('DROPBOX_ACCESS_TOKEN')
 
-# Configurar acceso a Dropbox
+# Set up Dropbox access
 dbx = dropbox.Dropbox(access_token)
 
-# Función para validar las columnas
+# Function to validate columns
 def validate_columns(df, required_columns):
     missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
@@ -23,7 +24,7 @@ def validate_columns(df, required_columns):
     else:
         return True, None
 
-# Función para obtener el nombre de la carpeta basado en el mes siguiente
+# Function to get the folder name based on the next month
 def get_next_month_folder():
     today = datetime.today()
     next_month = today.month % 12 + 1
@@ -32,30 +33,45 @@ def get_next_month_folder():
     folder_name = f"{month_name} - {year}"
     return folder_name
 
-# Subir el archivo
-st.title("Validación y Carga de Archivo a Dropbox")
+# Function to share a folder
+def share_folder(dropbox_folder_path):
+    try:
+        shared_link_metadata = dbx.sharing_create_shared_link_with_settings(dropbox_folder_path)
+        return shared_link_metadata.url
+    except dropbox.exceptions.ApiError as e:
+        st.error(f"Error al compartir la carpeta: {e}")
+        return None
 
+# Display the link to the format type
+st.title("Validación y Carga de Archivo BAES")
+
+st.markdown("### Formato Tipo")
+st.markdown("[Descargar formato tipo](https://docs.google.com/spreadsheets/d/1zjK2javlZ0mIYfyLHJym5rXSjgObNwRM/edit?usp=sharing&ouid=100328272349448439738&rtpof=true&sd=true)")
+
+# Upload the file
 uploaded_file = st.file_uploader("Sube tu archivo Excel", type=["xlsx"])
 
 if uploaded_file:
     df = pd.read_excel(uploaded_file, sheet_name=0)
     
-    # Validar las columnas
-    required_columns = ['RUTc', 'DV', 'SEDE', 'VIGENCIA', 'NOMBRES', 'ESTADO MZ', 
-                        'PAG MARZO', 'ESTADO AB', 'PAG ABRIL', 'ESTADO MY', 'PAG MAYO', 
-                        'TOTAL', 'ESTADO JUN', 'PAG JUNIO', 'ESTADO JUL', 'PAG JUL RENOV', 
-                        'PAG JUL ASIG', 'TOTAL JUN - JUL', 'ESTADO AGO', 'RETRO']
+    # Validate the columns
+    required_columns = ['RUTc', 'DV', 'SEDE', 'VIGENCIA', 'NOMBRES',
+    'Estado-mar', 'Pago-mar', 'Estado-abr', 'Pago-abr',
+                        'Estado-may', 'Pago-may', 'Estado-jun', 'Pago-jun',
+                        'Estado-jul', 'Pago-jul', 'Estado-ago', 'Pago-ago',
+                        'Estado-sep', 'Pago-sep', 'Estado-oct', 'Pago-oct',
+                        'Estado-nov', 'Pago-nov', 'Estado-dic', 'Pago-dic']
     
     is_valid, missing_columns = validate_columns(df, required_columns)
     
     if is_valid:
         st.success("El archivo es válido y todas las columnas requeridas están presentes.")
         
-        # Obtener el nombre del archivo basado en la primera entrada de la columna SEDE
+        # Get the file name based on the first entry in the SEDE column
         sede_name = df.loc[0, 'SEDE']
         file_name = f"{sede_name}.xlsx"
         
-        # Crear la carpeta en Dropbox si no existe
+        # Create the folder in Dropbox if it doesn't exist
         folder_name = get_next_month_folder()
         dropbox_folder_path = f'/{folder_name}'
         
@@ -68,7 +84,7 @@ if uploaded_file:
             else:
                 raise
         
-        # Guardar el archivo en Dropbox
+        # Save the file in Dropbox
         dropbox_file_path = f'{dropbox_folder_path}/{file_name}'
         
         with st.spinner("Cargando archivo a Dropbox..."):
@@ -77,7 +93,8 @@ if uploaded_file:
                 buffer.seek(0)
                 dbx.files_upload(buffer.read(), dropbox_file_path, mode=dropbox.files.WriteMode("overwrite"))
         
-        st.success(f"El archivo {file_name} ha sido guardado exitosamente en Dropbox en la ruta: {dropbox_file_path}")
+        st.success(f"El archivo {file_name} ha sido guardado exitosamente en la ruta: {dropbox_file_path}")
+        
     
     else:
         st.error(f"El archivo no es válido. Faltan las siguientes columnas: {missing_columns}")
